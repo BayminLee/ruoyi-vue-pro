@@ -1,12 +1,12 @@
 package cn.iocoder.yudao.framework.common.pojo;
 
+import cn.hutool.core.lang.Assert;
 import cn.iocoder.yudao.framework.common.exception.ErrorCode;
-import cn.iocoder.yudao.framework.common.exception.ServerException;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeConstants;
+import cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
-import org.springframework.util.Assert;
 
 import java.io.Serializable;
 import java.util.Objects;
@@ -26,15 +26,15 @@ public class CommonResult<T> implements Serializable {
      */
     private Integer code;
     /**
-     * 返回数据
-     */
-    private T data;
-    /**
      * 错误提示，用户可阅读
      *
      * @see ErrorCode#getMsg() ()
      */
     private String msg;
+    /**
+     * 返回数据
+     */
+    private T data;
 
     /**
      * 将传入的 result 对象，转换成另外一个泛型结果的对象
@@ -50,10 +50,18 @@ public class CommonResult<T> implements Serializable {
     }
 
     public static <T> CommonResult<T> error(Integer code, String message) {
-        Assert.isTrue(!GlobalErrorCodeConstants.SUCCESS.getCode().equals(code), "code 必须是错误的！");
+        Assert.notEquals(GlobalErrorCodeConstants.SUCCESS.getCode(), code, "code 必须是错误的！");
         CommonResult<T> result = new CommonResult<>();
         result.code = code;
         result.msg = message;
+        return result;
+    }
+
+    public static <T> CommonResult<T> error(ErrorCode errorCode, Object... params) {
+        Assert.notEquals(GlobalErrorCodeConstants.SUCCESS.getCode(), errorCode.getCode(), "code 必须是错误的！");
+        CommonResult<T> result = new CommonResult<>();
+        result.code = errorCode.getCode();
+        result.msg = ServiceExceptionUtil.doFormat(errorCode.getCode(), errorCode.getMsg(), params);
         return result;
     }
 
@@ -91,10 +99,6 @@ public class CommonResult<T> implements Serializable {
     public void checkError() throws ServiceException {
         if (isSuccess()) {
             return;
-        }
-        // 服务端异常
-        if (GlobalErrorCodeConstants.isServerErrorCode(code)) {
-            throw new ServerException(code, msg);
         }
         // 业务异常
         throw new ServiceException(code, msg);

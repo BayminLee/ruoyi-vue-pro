@@ -3,6 +3,8 @@ package cn.iocoder.yudao.framework.datapermission.core.rule.dept;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
+import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.util.collection.CollectionUtils;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
@@ -11,19 +13,17 @@ import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.yudao.framework.mybatis.core.util.MyBatisUtils;
 import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
-import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
-import cn.iocoder.yudao.module.system.api.permission.dto.DeptDataPermissionRespDTO;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.expression.Alias;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.LongValue;
-import net.sf.jsqlparser.expression.NullValue;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,7 +36,7 @@ import java.util.Set;
  * 注意，使用 DeptDataPermissionRule 时，需要保证表中有 dept_id 部门编号的字段，可自定义。
  *
  * 实际业务场景下，会存在一个经典的问题？当用户修改部门时，冗余的 dept_id 是否需要修改？
- * 1. 一般情况下，dept_id 不进行修改，则会导致用户看到之前的数据。【yudao-server 采用该方案】
+ * 1. 一般情况下，dept_id 不进行修改，则会导致用户看不到之前的数据。【yudao-server 采用该方案】
  * 2. 部分情况下，希望该用户还是能看到之前的数据，则有两种方式解决：【需要你改造该 DeptDataPermissionRule 的实现代码】
  *  1）编写洗数据的脚本，将 dept_id 修改成新部门的编号；【建议】
  *      最终过滤条件是 WHERE dept_id = ?
@@ -59,9 +59,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
     private static final String DEPT_COLUMN_NAME = "dept_id";
     private static final String USER_COLUMN_NAME = "user_id";
 
-    static final Expression EXPRESSION_NULL = new NullValue();
-
-    private final PermissionApi permissionApi;
+    private final PermissionCommonApi permissionApi;
 
     /**
      * 基于部门的表字段配置
@@ -135,7 +133,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
                     JsonUtils.toJsonString(loginUser), tableName, tableAlias, JsonUtils.toJsonString(deptDataPermission));
 //            throw new NullPointerException(String.format("LoginUser(%d) Table(%s/%s) 构建的条件为空",
 //                    loginUser.getId(), tableName, tableAlias.getName()));
-            return EXPRESSION_NULL;
+            return new EqualsTo(null, null); // WHERE null = null，可以保证返回的数据为空
         }
         if (deptExpression == null) {
             return userExpression;
@@ -143,8 +141,8 @@ public class DeptDataPermissionRule implements DataPermissionRule {
         if (userExpression == null) {
             return deptExpression;
         }
-        // 目前，如果有指定部门 + 可查看自己，采用 OR 条件。即，WHERE dept_id IN ? OR user_id = ?
-        return new OrExpression(deptExpression, userExpression);
+        // 目前，如果有指定部门 + 可查看自己，采用 OR 条件。即，WHERE (dept_id IN ? OR user_id = ?)
+        return new ParenthesedExpressionList(new OrExpression(deptExpression, userExpression));
     }
 
     private Expression buildDeptExpression(String tableName, Alias tableAlias, Set<Long> deptIds) {
@@ -159,7 +157,8 @@ public class DeptDataPermissionRule implements DataPermissionRule {
         }
         // 拼接条件
         return new InExpression(MyBatisUtils.buildColumn(tableName, tableAlias, columnName),
-                new ExpressionList(CollectionUtils.convertList(deptIds, LongValue::new)));
+                // Parenthesis 的目的，是提供 (1,2,3) 的 () 左右括号
+                new ParenthesedExpressionList(new ExpressionList<LongValue>(CollectionUtils.convertList(deptIds, LongValue::new))));
     }
 
     private Expression buildUserExpression(String tableName, Alias tableAlias, Boolean self, Long userId) {

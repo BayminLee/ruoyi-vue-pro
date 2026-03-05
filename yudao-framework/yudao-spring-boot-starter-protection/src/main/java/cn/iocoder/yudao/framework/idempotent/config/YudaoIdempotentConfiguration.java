@@ -4,17 +4,16 @@ import cn.iocoder.yudao.framework.idempotent.core.aop.IdempotentAspect;
 import cn.iocoder.yudao.framework.idempotent.core.keyresolver.impl.DefaultIdempotentKeyResolver;
 import cn.iocoder.yudao.framework.idempotent.core.keyresolver.impl.ExpressionIdempotentKeyResolver;
 import cn.iocoder.yudao.framework.idempotent.core.keyresolver.IdempotentKeyResolver;
+import cn.iocoder.yudao.framework.idempotent.core.keyresolver.impl.UserIdempotentKeyResolver;
 import cn.iocoder.yudao.framework.idempotent.core.redis.IdempotentRedisDAO;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import cn.iocoder.yudao.framework.redis.config.YudaoRedisAutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
 
-@Configuration(proxyBeanMethods = false)
-@AutoConfigureAfter(YudaoRedisAutoConfiguration.class)
+@AutoConfiguration(after = YudaoRedisAutoConfiguration.class)
 public class YudaoIdempotentConfiguration {
 
     @Bean
@@ -32,6 +31,11 @@ public class YudaoIdempotentConfiguration {
     @Bean
     public DefaultIdempotentKeyResolver defaultIdempotentKeyResolver() {
         return new DefaultIdempotentKeyResolver();
+    }
+
+    @Bean
+    public UserIdempotentKeyResolver userIdempotentKeyResolver() {
+        return new UserIdempotentKeyResolver();
     }
 
     @Bean

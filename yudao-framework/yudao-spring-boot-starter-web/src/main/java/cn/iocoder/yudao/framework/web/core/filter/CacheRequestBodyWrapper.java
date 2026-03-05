@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.framework.web.core.filter;
 
-import cn.hutool.extra.servlet.ServletUtil;
+import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
 
 import javax.servlet.ReadListener;
 import javax.servlet.ServletInputStream;
@@ -8,7 +8,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletRequestWrapper;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStreamReader;
 
 /**
@@ -25,16 +24,26 @@ public class CacheRequestBodyWrapper extends HttpServletRequestWrapper {
 
     public CacheRequestBodyWrapper(HttpServletRequest request) {
         super(request);
-        body = ServletUtil.getBodyBytes(request);
+        body = ServletUtils.getBodyBytes(request);
     }
 
     @Override
-    public BufferedReader getReader() throws IOException {
+    public BufferedReader getReader() {
         return new BufferedReader(new InputStreamReader(this.getInputStream()));
     }
 
     @Override
-    public ServletInputStream getInputStream() throws IOException {
+    public int getContentLength() {
+        return body.length;
+    }
+
+    @Override
+    public long getContentLengthLong() {
+        return body.length;
+    }
+
+    @Override
+    public ServletInputStream getInputStream() {
         final ByteArrayInputStream inputStream = new ByteArrayInputStream(body);
         // 返回 ServletInputStream
         return new ServletInputStream() {

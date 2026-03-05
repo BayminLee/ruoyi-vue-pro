@@ -1,13 +1,18 @@
 package cn.iocoder.yudao.framework.test.core.util;
 
+import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import uk.co.jemos.podam.api.PodamFactory;
 import uk.co.jemos.podam.api.PodamFactoryImpl;
+import uk.co.jemos.podam.common.AttributeStrategy;
 
+import javax.validation.constraints.Email;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -40,20 +45,23 @@ public class RandomUtils {
         // Integer
         PODAM_FACTORY.getStrategy().addOrReplaceTypeManufacturer(Integer.class, (dataProviderStrategy, attributeMetadata, map) -> {
             // 如果是 status 的字段，返回 0 或 1
-            if (attributeMetadata.getAttributeName().equals("status")) {
+            if ("status".equals(attributeMetadata.getAttributeName())) {
                 return RandomUtil.randomEle(CommonStatusEnum.values()).getStatus();
             }
             // 如果是 type、status 结尾的字段，返回 tinyint 范围
             if (StrUtil.endWithAnyIgnoreCase(attributeMetadata.getAttributeName(),
-                    "type", "status", "category", "scope")) {
+                    "type", "status", "category", "scope", "result")) {
                 return RandomUtil.randomInt(0, TINYINT_MAX + 1);
             }
             return RandomUtil.randomInt();
         });
+        // LocalDateTime
+        PODAM_FACTORY.getStrategy().addOrReplaceTypeManufacturer(LocalDateTime.class,
+                (dataProviderStrategy, attributeMetadata, map) -> randomLocalDateTime());
         // Boolean
         PODAM_FACTORY.getStrategy().addOrReplaceTypeManufacturer(Boolean.class, (dataProviderStrategy, attributeMetadata, map) -> {
             // 如果是 deleted 的字段，返回非删除
-            if (attributeMetadata.getAttributeName().equals("deleted")) {
+            if ("deleted".equals(attributeMetadata.getAttributeName())) {
                 return false;
             }
             return RandomUtil.randomBoolean();
@@ -76,6 +84,11 @@ public class RandomUtils {
         return RandomUtil.randomDay(0, RANDOM_DATE_MAX);
     }
 
+    public static LocalDateTime randomLocalDateTime() {
+        // 设置 Nano 为零的原因，避免 MySQL、H2 存储不到时间戳
+        return LocalDateTimeUtil.of(randomDate()).withNano(0);
+    }
+
     public static Short randomShort() {
         return (short) RandomUtil.randomInt(0, Short.MAX_VALUE);
     }
@@ -87,6 +100,18 @@ public class RandomUtils {
 
     public static Integer randomCommonStatus() {
         return RandomUtil.randomEle(CommonStatusEnum.values()).getStatus();
+    }
+
+    public static String randomEmail() {
+        return randomString() + "@qq.com";
+    }
+
+    public static String randomMobile() {
+        return "13800138" + RandomUtil.randomNumbers(3);
+    }
+
+    public static String randomURL() {
+        return "https://www.iocoder.cn/" + randomString();
     }
 
     @SafeVarargs
@@ -112,6 +137,11 @@ public class RandomUtils {
     @SafeVarargs
     public static <T> List<T> randomPojoList(Class<T> clazz, Consumer<T>... consumers) {
         int size = RandomUtil.randomInt(1, RANDOM_COLLECTION_LENGTH);
+        return randomPojoList(clazz, size, consumers);
+    }
+
+    @SafeVarargs
+    public static <T> List<T> randomPojoList(Class<T> clazz, int size, Consumer<T>... consumers) {
         return Stream.iterate(0, i -> i).limit(size).map(o -> randomPojo(clazz, consumers))
                 .collect(Collectors.toList());
     }

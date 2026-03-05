@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.framework.web.core.util;
 
-import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.util.NumberUtil;
+import cn.iocoder.yudao.framework.common.enums.TerminalEnum;
 import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.web.config.WebProperties;
@@ -24,6 +25,14 @@ public class WebFrameworkUtils {
     private static final String REQUEST_ATTRIBUTE_COMMON_RESULT = "common_result";
 
     public static final String HEADER_TENANT_ID = "tenant-id";
+    public static final String HEADER_VISIT_TENANT_ID = "visit-tenant-id";
+
+    /**
+     * 终端的 Header
+     *
+     * @see cn.iocoder.yudao.framework.common.enums.TerminalEnum
+     */
+    public static final String HEADER_TERMINAL = "terminal";
 
     private static WebProperties properties;
 
@@ -40,7 +49,19 @@ public class WebFrameworkUtils {
      */
     public static Long getTenantId(HttpServletRequest request) {
         String tenantId = request.getHeader(HEADER_TENANT_ID);
-        return StrUtil.isNotEmpty(tenantId) ? Long.valueOf(tenantId) : null;
+        return NumberUtil.isNumber(tenantId) ? Long.valueOf(tenantId) : null;
+    }
+
+    /**
+     * 获得访问的租户编号，从 header 中
+     * 考虑到其它 framework 组件也会使用到租户编号，所以不得不放在 WebFrameworkUtils 统一提供
+     *
+     * @param request 请求
+     * @return 租户编号
+     */
+    public static Long getVisitTenantId(HttpServletRequest request) {
+        String tenantId = request.getHeader(HEADER_VISIT_TENANT_ID);
+        return NumberUtil.isNumber(tenantId)? Long.valueOf(tenantId) : null;
     }
 
     public static void setLoginUserId(ServletRequest request, Long userId) {
@@ -88,10 +109,10 @@ public class WebFrameworkUtils {
             return userType;
         }
         // 2. 其次，基于 URL 前缀的约定
-        if (request.getRequestURI().startsWith(properties.getAdminApi().getPrefix())) {
+        if (request.getServletPath().startsWith(properties.getAdminApi().getPrefix())) {
             return UserTypeEnum.ADMIN.getValue();
         }
-        if (request.getRequestURI().startsWith(properties.getAppApi().getPrefix())) {
+        if (request.getServletPath().startsWith(properties.getAppApi().getPrefix())) {
             return UserTypeEnum.MEMBER.getValue();
         }
         return null;
@@ -107,6 +128,15 @@ public class WebFrameworkUtils {
         return getLoginUserId(request);
     }
 
+    public static Integer getTerminal() {
+        HttpServletRequest request = getRequest();
+        if (request == null) {
+            return TerminalEnum.UNKNOWN.getTerminal();
+        }
+        String terminalValue = request.getHeader(HEADER_TERMINAL);
+        return NumberUtil.parseInt(terminalValue, TerminalEnum.UNKNOWN.getTerminal());
+    }
+
     public static void setCommonResult(ServletRequest request, CommonResult<?> result) {
         request.setAttribute(REQUEST_ATTRIBUTE_COMMON_RESULT, result);
     }
@@ -115,7 +145,8 @@ public class WebFrameworkUtils {
         return (CommonResult<?>) request.getAttribute(REQUEST_ATTRIBUTE_COMMON_RESULT);
     }
 
-    private static HttpServletRequest getRequest() {
+    @SuppressWarnings("PatternVariableCanBeUsed")
+    public static HttpServletRequest getRequest() {
         RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
         if (!(requestAttributes instanceof ServletRequestAttributes)) {
             return null;

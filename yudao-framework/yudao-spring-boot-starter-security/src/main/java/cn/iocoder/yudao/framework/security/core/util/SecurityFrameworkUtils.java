@@ -1,5 +1,8 @@
 package cn.iocoder.yudao.framework.security.core.util;
 
+import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.framework.web.core.util.WebFrameworkUtils;
 import org.springframework.lang.Nullable;
@@ -20,6 +23,9 @@ import java.util.Collections;
  */
 public class SecurityFrameworkUtils {
 
+    /**
+     * HEADER 认证头 value 的前缀
+     */
     public static final String AUTHORIZATION_BEARER = "Bearer";
 
     private SecurityFrameworkUtils() {}
@@ -28,19 +34,23 @@ public class SecurityFrameworkUtils {
      * 从请求中，获得认证 Token
      *
      * @param request 请求
-     * @param header 认证 Token 对应的 Header 名字
+     * @param headerName 认证 Token 对应的 Header 名字
+     * @param parameterName 认证 Token 对应的 Parameter 名字
      * @return 认证 Token
      */
-    public static String obtainAuthorization(HttpServletRequest request, String header) {
-        String authorization = request.getHeader(header);
-        if (!StringUtils.hasText(authorization)) {
+    public static String obtainAuthorization(HttpServletRequest request,
+                                             String headerName, String parameterName) {
+        // 1. 获得 Token。优先级：Header > Parameter
+        String token = request.getHeader(headerName);
+        if (StrUtil.isEmpty(token)) {
+            token = request.getParameter(parameterName);
+        }
+        if (!StringUtils.hasText(token)) {
             return null;
         }
-        int index = authorization.indexOf(AUTHORIZATION_BEARER + " ");
-        if (index == -1) { // 未找到
-            return null;
-        }
-        return authorization.substring(index + 7).trim();
+        // 2. 去除 Token 中带的 Bearer
+        int index = token.indexOf(AUTHORIZATION_BEARER + " ");
+        return index >= 0 ? token.substring(index + 7).trim() : token;
     }
 
     /**
@@ -82,6 +92,28 @@ public class SecurityFrameworkUtils {
     }
 
     /**
+     * 获得当前用户的昵称，从上下文中
+     *
+     * @return 昵称
+     */
+    @Nullable
+    public static String getLoginUserNickname() {
+        LoginUser loginUser = getLoginUser();
+        return loginUser != null ? MapUtil.getStr(loginUser.getInfo(), LoginUser.INFO_KEY_NICKNAME) : null;
+    }
+
+    /**
+     * 获得当前用户的部门编号，从上下文中
+     *
+     * @return 部门编号
+     */
+    @Nullable
+    public static Long getLoginUserDeptId() {
+        LoginUser loginUser = getLoginUser();
+        return loginUser != null ? MapUtil.getLong(loginUser.getInfo(), LoginUser.INFO_KEY_DEPT_ID) : null;
+    }
+
+    /**
      * 设置当前用户
      *
      * @param loginUser 登录用户
@@ -94,8 +126,10 @@ public class SecurityFrameworkUtils {
 
         // 额外设置到 request 中，用于 ApiAccessLogFilter 可以获取到用户编号；
         // 原因是，Spring Security 的 Filter 在 ApiAccessLogFilter 后面，在它记录访问日志时，线上上下文已经没有用户编号等信息
-        WebFrameworkUtils.setLoginUserId(request, loginUser.getId());
-        WebFrameworkUtils.setLoginUserType(request, loginUser.getUserType());
+        if (request != null) {
+            WebFrameworkUtils.setLoginUserId(request, loginUser.getId());
+            WebFrameworkUtils.setLoginUserType(request, loginUser.getUserType());
+        }
     }
 
     private static Authentication buildAuthentication(LoginUser loginUser, HttpServletRequest request) {
@@ -104,6 +138,23 @@ public class SecurityFrameworkUtils {
                 loginUser, null, Collections.emptyList());
         authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         return authenticationToken;
+    }
+
+    /**
+     * 是否条件跳过权限校验，包括数据权限、功能权限
+     *
+     * @return 是否跳过
+     */
+    public static boolean skipPermissionCheck() {
+        LoginUser loginUser = getLoginUser();
+        if (loginUser == null) {
+            return false;
+        }
+        if (loginUser.getVisitTenantId() == null) {
+            return false;
+        }
+        // 重点：跨租户访问时，无法进行权限校验
+        return ObjUtil.notEqual(loginUser.getVisitTenantId(), loginUser.getTenantId());
     }
 
 }

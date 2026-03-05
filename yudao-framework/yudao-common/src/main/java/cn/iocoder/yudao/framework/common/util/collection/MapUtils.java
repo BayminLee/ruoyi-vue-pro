@@ -2,10 +2,12 @@ package cn.iocoder.yudao.framework.common.util.collection;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.util.ObjUtil;
 import cn.iocoder.yudao.framework.common.core.KeyValue;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -40,6 +42,7 @@ public class MapUtils {
 
     /**
      * 从哈希表查找到 key 对应的 value，然后进一步处理
+     * key 为 null 时, 不处理
      * 注意，如果查找到的 value 为 null 时，不进行处理
      *
      * @param map 哈希表
@@ -47,7 +50,7 @@ public class MapUtils {
      * @param consumer 进一步处理的逻辑
      */
     public static <K, V> void findAndThen(Map<K, V> map, K key, Consumer<V> consumer) {
-        if (CollUtil.isEmpty(map)) {
+        if (ObjUtil.isNull(key) || CollUtil.isEmpty(map)) {
             return;
         }
         V value = map.get(key);
@@ -61,6 +64,49 @@ public class MapUtils {
         Map<K, V> map = Maps.newLinkedHashMapWithExpectedSize(keyValues.size());
         keyValues.forEach(keyValue -> map.put(keyValue.getKey(), keyValue.getValue()));
         return map;
+    }
+
+    /**
+     * 从 Map 中获取 BigDecimal 值
+     *
+     * @param map Map 数据源
+     * @param key 键名
+     * @return BigDecimal 值，解析失败或值为 null 时返回 null
+     */
+    public static BigDecimal getBigDecimal(Map<String, ?> map, String key) {
+        return getBigDecimal(map, key, null);
+    }
+
+    /**
+     * 从 Map 中获取 BigDecimal 值
+     *
+     * @param map          Map 数据源
+     * @param key          键名
+     * @param defaultValue 默认值
+     * @return BigDecimal 值，解析失败或值为 null 时返回默认值
+     */
+    public static BigDecimal getBigDecimal(Map<String, ?> map, String key, BigDecimal defaultValue) {
+        if (map == null) {
+            return defaultValue;
+        }
+        Object value = map.get(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        if (value instanceof String) {
+            try {
+                return new BigDecimal((String) value);
+            } catch (NumberFormatException e) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
     }
 
 }

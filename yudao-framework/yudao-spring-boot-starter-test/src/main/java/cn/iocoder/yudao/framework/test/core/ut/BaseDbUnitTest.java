@@ -1,10 +1,12 @@
 package cn.iocoder.yudao.framework.test.core.ut;
 
+import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.framework.datasource.config.YudaoDataSourceAutoConfiguration;
 import cn.iocoder.yudao.framework.mybatis.config.YudaoMybatisAutoConfiguration;
 import cn.iocoder.yudao.framework.test.config.SqlInitializationTestConfiguration;
 import com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure;
 import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
+import com.github.yulichang.autoconfigure.MybatisPlusJoinAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +36,10 @@ public class BaseDbUnitTest {
             // MyBatis 配置类
             YudaoMybatisAutoConfiguration.class, // 自己的 MyBatis 配置类
             MybatisPlusAutoConfiguration.class, // MyBatis 的自动配置类
+            MybatisPlusJoinAutoConfiguration.class, // MyBatis 的Join配置类
+
+            // 其它配置类
+            SpringUtil.class
     })
     public static class Application {
     }

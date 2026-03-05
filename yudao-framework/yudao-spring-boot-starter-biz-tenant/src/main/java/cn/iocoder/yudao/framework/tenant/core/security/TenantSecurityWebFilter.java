@@ -21,14 +21,13 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 多租户 Security Web 过滤器
  * 1. 如果是登陆的用户，校验是否有权限访问该租户，避免越权问题。
  * 2. 如果请求未带租户的编号，检查是否是忽略的 URL，否则也不允许访问。
  * 3. 校验租户是合法，例如说被禁用、到期
- *
- * 校验用户访问的租户，是否是其所在的租户，
  *
  * @author 芋道源码
  */
@@ -37,17 +36,26 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
 
     private final TenantProperties tenantProperties;
 
+    /**
+     * 允许忽略租户的 URL 列表
+     *
+     * 目的：解决 <a href="https://gitee.com/zhijiantianya/yudao-cloud/issues/ICUQL9">修改配置会导致 @TenantIgnore Controller 接口过滤失效</>
+     */
+    private final Set<String> ignoreUrls;
+
     private final AntPathMatcher pathMatcher;
 
     private final GlobalExceptionHandler globalExceptionHandler;
     private final TenantFrameworkService tenantFrameworkService;
 
-    public TenantSecurityWebFilter(TenantProperties tenantProperties,
-                                   WebProperties webProperties,
+    public TenantSecurityWebFilter(WebProperties webProperties,
+                                   TenantProperties tenantProperties,
+                                   Set<String> ignoreUrls,
                                    GlobalExceptionHandler globalExceptionHandler,
                                    TenantFrameworkService tenantFrameworkService) {
         super(webProperties);
         this.tenantProperties = tenantProperties;
+        this.ignoreUrls = ignoreUrls;
         this.pathMatcher = new AntPathMatcher();
         this.globalExceptionHandler = globalExceptionHandler;
         this.tenantFrameworkService = tenantFrameworkService;
@@ -81,7 +89,7 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
             if (tenantId == null) {
                 log.error("[doFilterInternal][URL({}/{}) 未传递租户编号]", request.getRequestURI(), request.getMethod());
                 ServletUtils.writeJSON(response, CommonResult.error(GlobalErrorCodeConstants.BAD_REQUEST.getCode(),
-                        "租户的请求未传递，请进行排查"));
+                        "请求的租户标识未传递，请进行排查"));
                 return;
             }
             // 3. 校验租户是合法，例如说被禁用、到期
@@ -103,13 +111,20 @@ public class TenantSecurityWebFilter extends ApiRequestFilter {
     }
 
     private boolean isIgnoreUrl(HttpServletRequest request) {
+        String apiUri = request.getRequestURI().substring(request.getContextPath().length());
         // 快速匹配，保证性能
-        if (CollUtil.contains(tenantProperties.getIgnoreUrls(), request.getRequestURI())) {
+        if (CollUtil.contains(tenantProperties.getIgnoreUrls(), apiUri)
+            || CollUtil.contains(ignoreUrls, apiUri)) {
             return true;
         }
         // 逐个 Ant 路径匹配
         for (String url : tenantProperties.getIgnoreUrls()) {
-            if (pathMatcher.match(url, request.getRequestURI())) {
+            if (pathMatcher.match(url, apiUri)) {
+                return true;
+            }
+        }
+        for (String url : ignoreUrls) {
+            if (pathMatcher.match(url, apiUri)) {
                 return true;
             }
         }

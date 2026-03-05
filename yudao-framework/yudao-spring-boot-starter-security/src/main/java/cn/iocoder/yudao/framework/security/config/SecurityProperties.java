@@ -6,6 +6,8 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
+import java.util.Collections;
+import java.util.List;
 
 @ConfigurationProperties(prefix = "yudao.security")
 @Validated
@@ -17,6 +19,13 @@ public class SecurityProperties {
      */
     @NotEmpty(message = "Token Header 不能为空")
     private String tokenHeader = "Authorization";
+    /**
+     * HTTP 请求时，访问令牌的请求参数
+     *
+     * 初始目的：解决 WebSocket 无法通过 header 传参，只能通过 token 参数拼接
+     */
+    @NotEmpty(message = "Token Parameter 不能为空")
+    private String tokenParameter = "token";
 
     /**
      * mock 模式的开关
@@ -30,4 +39,13 @@ public class SecurityProperties {
     @NotEmpty(message = "mock 模式的密钥不能为空") // 这里设置了一个默认值，因为实际上只有 mockEnable 为 true 时才需要配置。
     private String mockSecret = "test";
 
+    /**
+     * 免登录的 URL 列表
+     */
+    private List<String> permitAllUrls = Collections.emptyList();
+
+    /**
+     * PasswordEncoder 加密复杂度，越高开销越大
+     */
+    private Integer passwordEncoderLength = 4;
 }

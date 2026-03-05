@@ -1,64 +1,89 @@
 package cn.iocoder.yudao.framework.web.config;
 
-import cn.iocoder.yudao.framework.apilog.core.service.ApiErrorLogFrameworkService;
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.biz.infra.logger.ApiErrorLogCommonApi;
 import cn.iocoder.yudao.framework.common.enums.WebFilterOrderEnum;
 import cn.iocoder.yudao.framework.web.core.filter.CacheRequestBodyFilter;
 import cn.iocoder.yudao.framework.web.core.filter.DemoFilter;
-import cn.iocoder.yudao.framework.web.core.filter.XssFilter;
 import cn.iocoder.yudao.framework.web.core.handler.GlobalExceptionHandler;
 import cn.iocoder.yudao.framework.web.core.handler.GlobalResponseBodyHandler;
 import cn.iocoder.yudao.framework.web.core.util.WebFrameworkUtils;
+import com.google.common.collect.Maps;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.web.client.RestTemplateAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.servlet.WebMvcRegistrations;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.util.AntPathMatcher;
-import org.springframework.util.PathMatcher;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
-import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
-import javax.annotation.Resource;
 import javax.servlet.Filter;
+import java.util.Map;
+import java.util.function.Predicate;
 
-@Configuration
-@EnableConfigurationProperties({WebProperties.class, XssProperties.class})
-public class YudaoWebAutoConfiguration implements WebMvcConfigurer {
+@AutoConfiguration
+@EnableConfigurationProperties(WebProperties.class)
+public class YudaoWebAutoConfiguration {
 
-    @Resource
-    private WebProperties webProperties;
     /**
      * 应用名
      */
     @Value("${spring.application.name}")
     private String applicationName;
 
-    @Override
-    public void configurePathMatch(PathMatchConfigurer configurer) {
-        configurePathMatch(configurer, webProperties.getAdminApi());
-        configurePathMatch(configurer, webProperties.getAppApi());
-    }
+    @Bean
+    public WebMvcRegistrations webMvcRegistrations(WebProperties webProperties) {
+        return new WebMvcRegistrations() {
 
-    /**
-     * 设置 API 前缀，仅仅匹配 controller 包下的
-     *
-     * @param configurer 配置
-     * @param api API 配置
-     */
-    private void configurePathMatch(PathMatchConfigurer configurer, WebProperties.Api api) {
-        AntPathMatcher antPathMatcher = new AntPathMatcher(".");
-        configurer.addPathPrefix(api.getPrefix(), clazz -> clazz.isAnnotationPresent(RestController.class)
-                && antPathMatcher.match(api.getController(), clazz.getPackage().getName())); // 仅仅匹配 controller 包
+            @Override
+            public RequestMappingHandlerMapping getRequestMappingHandlerMapping() {
+                RequestMappingHandlerMapping mapping = new RequestMappingHandlerMapping();
+                // 实例化时就带上前缀
+                mapping.setPathPrefixes(buildPathPrefixes(webProperties));
+                return mapping;
+            }
+
+            /**
+             * 构建 prefix → 匹配条件的映射
+             */
+            private Map<String, Predicate<Class<?>>> buildPathPrefixes(WebProperties webProperties) {
+                AntPathMatcher antPathMatcher = new AntPathMatcher(".");
+                Map<String, Predicate<Class<?>>> pathPrefixes = Maps.newLinkedHashMapWithExpectedSize(2);
+                putPathPrefix(pathPrefixes, webProperties.getAdminApi(), antPathMatcher);
+                putPathPrefix(pathPrefixes, webProperties.getAppApi(), antPathMatcher);
+                return pathPrefixes;
+            }
+
+            /**
+             * 设置 API 前缀，仅仅匹配 controller 包下的
+             */
+            private void putPathPrefix(Map<String, Predicate<Class<?>>> pathPrefixes, WebProperties.Api api, AntPathMatcher matcher) {
+                if (api == null || StrUtil.isEmpty(api.getPrefix())) {
+                    return;
+                }
+                pathPrefixes.put(api.getPrefix(), // api 前缀
+                        clazz -> clazz.isAnnotationPresent(RestController.class)
+                                && matcher.match(api.getController(), clazz.getPackage().getName()));
+            }
+
+        };
     }
 
     @Bean
-    public GlobalExceptionHandler globalExceptionHandler(ApiErrorLogFrameworkService ApiErrorLogFrameworkService) {
-        return new GlobalExceptionHandler(applicationName, ApiErrorLogFrameworkService);
+    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
+    public GlobalExceptionHandler globalExceptionHandler(ApiErrorLogCommonApi apiErrorLogApi) {
+        return new GlobalExceptionHandler(applicationName, apiErrorLogApi);
     }
 
     @Bean
@@ -79,6 +104,7 @@ public class YudaoWebAutoConfiguration implements WebMvcConfigurer {
      * 创建 CorsFilter Bean，解决跨域问题
      */
     @Bean
+    @Order(value = WebFilterOrderEnum.CORS_FILTER) // 特殊：修复因执行顺序影响到跨域配置不生效问题
     public FilterRegistrationBean<CorsFilter> corsFilterBean() {
         // 创建 CorsConfiguration 对象
         CorsConfiguration config = new CorsConfiguration();
@@ -101,14 +127,6 @@ public class YudaoWebAutoConfiguration implements WebMvcConfigurer {
     }
 
     /**
-     * 创建 XssFilter Bean，解决 Xss 安全问题
-     */
-    @Bean
-    public FilterRegistrationBean<XssFilter> xssFilter(XssProperties properties, PathMatcher pathMatcher) {
-        return createFilterBean(new XssFilter(properties, pathMatcher), WebFilterOrderEnum.XSS_FILTER);
-    }
-
-    /**
      * 创建 DemoFilter Bean，演示模式
      */
     @Bean
@@ -117,10 +135,21 @@ public class YudaoWebAutoConfiguration implements WebMvcConfigurer {
         return createFilterBean(new DemoFilter(), WebFilterOrderEnum.DEMO_FILTER);
     }
 
-    private static <T extends Filter> FilterRegistrationBean<T> createFilterBean(T filter, Integer order) {
+    public static <T extends Filter> FilterRegistrationBean<T> createFilterBean(T filter, Integer order) {
         FilterRegistrationBean<T> bean = new FilterRegistrationBean<>(filter);
         bean.setOrder(order);
         return bean;
+    }
+
+    /**
+     * 创建 RestTemplate 实例
+     *
+     * @param restTemplateBuilder {@link RestTemplateAutoConfiguration#restTemplateBuilder}
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public RestTemplate restTemplate(RestTemplateBuilder restTemplateBuilder) {
+        return restTemplateBuilder.build();
     }
 
 }

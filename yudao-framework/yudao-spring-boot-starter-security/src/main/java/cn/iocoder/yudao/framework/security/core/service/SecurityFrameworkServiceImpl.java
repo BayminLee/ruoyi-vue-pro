@@ -1,14 +1,15 @@
 package cn.iocoder.yudao.framework.security.core.service;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
 import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
-import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
 import lombok.AllArgsConstructor;
 
 import java.util.Arrays;
 
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.skipPermissionCheck;
 
 /**
  * 默认的 {@link SecurityFrameworkService} 实现类
@@ -18,7 +19,7 @@ import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUti
 @AllArgsConstructor
 public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {
 
-    private final PermissionApi permissionApi;
+    private final PermissionCommonApi permissionApi;
 
     @Override
     public boolean hasPermission(String permission) {
@@ -27,7 +28,17 @@ public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {
 
     @Override
     public boolean hasAnyPermissions(String... permissions) {
-        return permissionApi.hasAnyPermissions(getLoginUserId(), permissions);
+        // 特殊：跨租户访问
+        if (skipPermissionCheck()) {
+            return true;
+        }
+
+        // 权限校验
+        Long userId = getLoginUserId();
+        if (userId == null) {
+            return false;
+        }
+        return permissionApi.hasAnyPermissions(userId, permissions);
     }
 
     @Override
@@ -37,7 +48,17 @@ public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {
 
     @Override
     public boolean hasAnyRoles(String... roles) {
-        return permissionApi.hasAnyRoles(getLoginUserId(), roles);
+        // 特殊：跨租户访问
+        if (skipPermissionCheck()) {
+            return true;
+        }
+
+        // 权限校验
+        Long userId = getLoginUserId();
+        if (userId == null) {
+            return false;
+        }
+        return permissionApi.hasAnyRoles(userId, roles);
     }
 
     @Override
@@ -47,6 +68,12 @@ public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {
 
     @Override
     public boolean hasAnyScopes(String... scope) {
+        // 特殊：跨租户访问
+        if (skipPermissionCheck()) {
+            return true;
+        }
+
+        // 权限校验
         LoginUser user = SecurityFrameworkUtils.getLoginUser();
         if (user == null) {
             return false;

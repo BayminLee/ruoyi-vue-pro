@@ -15,6 +15,8 @@ public interface WebFilterOrderEnum {
 
     int REQUEST_BODY_CACHE_FILTER = Integer.MIN_VALUE + 500;
 
+    int API_ENCRYPT_FILTER = REQUEST_BODY_CACHE_FILTER + 1;
+
     // OrderedRequestContextFilter 默认为 -105，用于国际化上下文等等
 
     int TENANT_CONTEXT_FILTER = - 104; // 需要保证在 ApiAccessLogFilter 前面
@@ -26,8 +28,6 @@ public interface WebFilterOrderEnum {
     // Spring Security Filter 默认为 -100，可见 org.springframework.boot.autoconfigure.security.SecurityProperties 配置属性类
 
     int TENANT_SECURITY_FILTER = -99; // 需要保证在 Spring Security 过滤器后面
-
-    int ACTIVITI_FILTER = -98; // 需要保证在 Spring Security 过滤后面
 
     int FLOWABLE_FILTER = -98; // 需要保证在 Spring Security 过滤后面
 
